@@ -1914,11 +1914,10 @@
         </div>
     </div>
     
-    <script>
-        // ========== PERSISTENCE FUNCTIONS (IN-MEMORY ONLY) ==========
-        // ⚠️ localStorage is BLOCKED in sandboxed environment
-        // State persists in JavaScript memory during session only
-        // Data is lost on page refresh (F5) - this is expected behavior
+   <script>
+        // ========== PERSISTENCE FUNCTIONS (USING LOCALSTORAGE) ==========
+        // ⚠️ This version uses localStorage to persist data
+        // Data will be saved across page reloads and browser sessions
         
         function saveState() {
             if (!appState.currentApp) {
@@ -1930,17 +1929,22 @@
             const storageKey = 'trainingApp_' + currentApp;
             
             try {
-                // Data stays in appState object (in-memory)
-                const data = appState[currentApp];
+                // Data to save
+                const dataToSave = appState[currentApp];
+                // Serialize the object to a JSON string
+                const serializedData = JSON.stringify(dataToSave);
                 
-                console.log('💾 SAVED (in-memory): ' + storageKey);
-                console.log('   Level: ' + data.level);
-                console.log('   Workouts: ' + data.workoutsCompleted);
-                console.log('   History: ' + data.trainingHistory.length + ' entries');
+                // ✅ SAVE TO LOCALSTORAGE
+                localStorage.setItem(storageKey, serializedData);
+                
+                console.log('💾 SAVED (localStorage): ' + storageKey);
+                console.log('    Level: ' + dataToSave.level);
+                console.log('    Workouts: ' + dataToSave.workoutsCompleted);
+                console.log('    History: ' + dataToSave.trainingHistory.length + ' entries');
                 
                 return true;
             } catch (e) {
-                console.error('Save error:', e);
+                console.error('Save error (localStorage may be full or disabled):', e);
                 return false;
             }
         }
@@ -1955,21 +1959,36 @@
             const storageKey = 'trainingApp_' + currentApp;
             
             try {
-                // Point state alias to current app
-                state = appState[currentApp];
+                // ✅ LOAD FROM LOCALSTORAGE
+                const serializedData = localStorage.getItem(storageKey);
                 
-                if (state.level !== null) {
-                    console.log('✅ LOADED (from memory): ' + storageKey);
-                    console.log('   Level: ' + state.level);
-                    console.log('   Workouts: ' + state.workoutsCompleted);
+                if (serializedData) {
+                    // Data found, parse it
+                    const loadedData = JSON.parse(serializedData);
+                    
+                    // ✅ MERGE with default state
+                    // This merges loaded data over the default, keeping any new properties
+                    appState[currentApp] = Object.assign({}, appState[currentApp], loadedData);
+                    
+                    // Point state alias to the loaded data
+                    state = appState[currentApp];
+                    
+                    console.log('✅ LOADED (from localStorage): ' + storageKey);
+                    console.log('    Level: ' + state.level);
+                    console.log('    Workouts: ' + state.workoutsCompleted);
                     return true;
+                } else {
+                    // No data found, use default state
+                    console.log('ℹ️ No data in localStorage for: ' + storageKey);
+                    // Point state alias to the default app state
+                    state = appState[currentApp];
+                    return false;
                 }
                 
-                console.log('ℹ️ No data in: ' + storageKey);
-                return false;
-                
             } catch (e) {
-                console.error('Load error:', e);
+                console.error('Load error (invalid JSON in localStorage?):', e);
+                // On error, just use default state
+                state = appState[currentApp];
                 return false;
             }
         }
@@ -1981,8 +2000,12 @@
             const storageKey = 'trainingApp_' + currentApp;
             
             try {
-                console.log('🗑️ CLEARED: ' + storageKey);
+                // ✅ CLEAR LOCALSTORAGE
+                localStorage.removeItem(storageKey);
                 
+                console.log('🗑️ CLEARED (localStorage & in-memory): ' + storageKey);
+                
+                // Reset the in-memory state object to default
                 appState[currentApp] = {
                     selectedSport: currentApp === 'rolki' ? 'roller-skating' : 'push-pull',
                     level: null,
@@ -1995,6 +2018,7 @@
                     currentWorkoutData: [],
                     activeTab: 'dashboard'
                 };
+                // Re-point the alias
                 state = appState[currentApp];
                 
                 return true;
@@ -2568,7 +2592,7 @@
             
             console.log(`APP: State loaded: ${loaded}`);
             
-            // ✅ Zapisz wybór aplikacji
+            // ✅ Zapisz wybór aplikacji (jeśli to pierwszy raz, zapisze domyślny stan)
             saveState();
             
             // Ukryj app selection screen
@@ -2607,10 +2631,10 @@
             console.log(`  userAssessment: ${currentAppState.userAssessment ? 'EXISTS' : 'NULL'}`);
             console.log(`  workoutsCompleted: ${currentAppState.workoutsCompleted}`);
             
-            // SCENARIUSZ 1: Ma sport + level + assessment
+            // SCENARIUSZ 1: Ma sport + level + assessment (zostało załadowane z localStorage)
             if (currentAppState.selectedSport && currentAppState.level && currentAppState.userAssessment) {
                 console.log(`✅ SCENARIO 1: Has sport + level + assessment`);
-                console.log(`   → SHOW DASHBOARD`);
+                console.log(`    → SHOW DASHBOARD`);
                 
                 document.getElementById('sport-selection-screen').style.display = 'none';
                 document.getElementById('view-assessment').style.display = 'none';
@@ -2620,10 +2644,10 @@
                 currentExercises = getCurrentExercisesDB();
                 switchTab('dashboard');
             } 
-            // SCENARIUSZ 2: Ma sport ale brak level/assessment
+            // SCENARIUSZ 2: Ma sport ale brak level/assessment (pierwsze uruchomienie)
             else if (currentAppState.selectedSport) {
                 console.log(`⚠️ SCENARIO 2: Has sport but no level/assessment`);
-                console.log(`   → SHOW ASSESSMENT`);
+                console.log(`    → SHOW ASSESSMENT`);
                 
                 document.getElementById('sport-selection-screen').style.display = 'none';
                 document.getElementById('view-assessment').style.display = 'flex';
@@ -2632,10 +2656,10 @@
                 
                 updateAssessmentForSport(currentAppState.selectedSport);
             } 
-            // SCENARIUSZ 3: First time - brak wszystkiego
+            // SCENARIUSZ 3: First time - brak wszystkiego (to nie powinno się zdarzyć po selectApp)
             else {
                 console.log(`ℹ️ SCENARIO 3: First time - no sport selected`);
-                console.log(`   → SHOW SPORT SELECTION`);
+                console.log(`    → SHOW SPORT SELECTION`);
                 
                 document.getElementById('sport-selection-screen').style.display = 'flex';
                 document.getElementById('view-assessment').style.display = 'none';
@@ -2674,6 +2698,8 @@
             document.getElementById('view-settings').style.display = 'none';
             document.getElementById('view-recovery').style.display = 'none';
             document.getElementById('view-assessment').style.display = 'none';
+            
+            // Ukryj sport-selection-screen (będzie pokazane app-selection-screen)
             document.getElementById('sport-selection-screen').style.display = 'none';
             
             console.log(`App selection shown`);
@@ -2694,7 +2720,7 @@
                 if (q4El) q4El.textContent = '4️⃣ Ile doświadczenia z jazdą na rolkach?';
                 if (q5El) q5El.textContent = '5️⃣ Czy masz kontuzje nóg?';
             } else {
-                assessmentCard.textContent = '📋 Ocena Formy - POMPKI I PODCI\u0104GANIE';
+                assessmentCard.textContent = '📋 Ocena Formy - POMPKI I PODCIĄGANIE';
                 if (q3El) q3El.textContent = '3️⃣ Czy potrafisz wykonać pompkę na jednej ręce?';
                 if (q4El) q4El.textContent = '4️⃣ Ile doświadczenia z treningiem pompek/podciągania?';
                 if (q5El) q5El.textContent = '5️⃣ Czy masz kontuzje górnej części ciała (ramiona, barki)?';
@@ -2770,7 +2796,7 @@
             };
             console.log('ASSESSMENT: Zapisano do state');
             
-            // ✅ ZAPISZ STATE
+            // ✅ ZAPISZ STATE (do localStorage)
             saveState();
             
             console.log('✅ ASSESSMENT SAVED');
@@ -2780,9 +2806,6 @@
             console.log(`   Assessment: COMPLETE`);
             console.log(`   Date: ${state.userAssessment.date}`);
             console.log('')
-            
-            // ✅ ZAPISZ DO localStorage
-            saveState();
             
             // INICJALIZUJ EXERCISES
             currentExercises = getCurrentExercisesDB();
@@ -2828,7 +2851,7 @@
             if (activeBtn) activeBtn.classList.add('active');
             
             state.activeTab = tabName;
-            saveState();  // ← ZAPISZ zmianę taba!
+            // saveState(); // Zapisywanie przy każdej zmianie taba może być nadmiarowe, ale jest bezpieczne
             
             // Initialize training if needed
             if (tabName === 'training' && !state.workoutInProgress) {
@@ -3368,9 +3391,9 @@
             
             mandatoryRecoveryState.selectedProtocol = protocol;
             
-            // ✅ ZAPISZ STATE
+            // ✅ ZAPISZ STATE (chociaż to tymczasowe, zapiszmy to)
             saveState();
-            console.log(`💾 Recovery protocol saved: ${protocol}`);
+            console.log(`💾 Recovery protocol selected: ${protocol}`);
             console.log('');
             
             // Ukryj selection
@@ -3523,10 +3546,10 @@
             // Update recovery stats
             recoveryState.totalSessions++;
             recoveryState.protocolCounts[mandatoryRecoveryState.selectedProtocol]++;
-            recoveryState.lastRecoveryDate = new Date().toISOString().split('T')[0];
+            const today = new Date().toISOString().split('T')[0];
+            recoveryState.lastRecoveryDate = today;
             
             // Calculate streak
-            const today = new Date().toISOString().split('T')[0];
             if (recoveryState.lastRecoveryDate === today) {
                 recoveryState.streak++;
             } else {
@@ -3590,7 +3613,7 @@
             
             console.log(`EXERCISE: Saved ${ex.name} - ${state.currentExerciseIndex + 1}/${currentExercises.length}`);
             
-            // ✅ ZAPISZ STATE
+            // ✅ ZAPISZ STATE (do localStorage) - zapisuje tymczasowy postęp
             saveState();
             console.log(`💾 Exercise data saved`);
             console.log('')
@@ -3639,7 +3662,7 @@
             
             console.log(`WORKOUT: Loading exercise ${state.currentExerciseIndex + 1}/${currentExercises.length}`);
             
-            saveState();
+            saveState(); // Zapisz postęp (które ćwiczenie)
             
             loadExercise(state.currentExerciseIndex);
         }
@@ -3699,7 +3722,7 @@
                 return;
             }
             
-            // WYCZYŚĆ STATE TYLKO DLA AKTUALNEJ APLIKACJI
+            // WYCZYŚĆ STATE (localStorage i pamięć)
             clearState();
             
             // Wyczyść currentExercises
