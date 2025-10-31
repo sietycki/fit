@@ -1914,23 +1914,28 @@
     </div>
     
     <script>
-        // ========== PERSISTENCE FUNCTIONS (IN-MEMORY WITH SESSION PERSISTENCE) ==========
-        // Note: Stan jest przechowywany w pamięci JavaScript podczas sesji przeglądarki.
-        // Po odświeżeniu strony (F5) dane POZOSTAJĄ, ponieważ są przechowywane w zmiennych globalnych.
-        // Dopiero po zamknięciu karty/przeglądarki dane są czyszczone.
+        // ========== PERSISTENCE FUNCTIONS (IN-MEMORY) ==========
+        // Note: Stan jest przechowywany w pamięci JavaScript (appState object).
+        // localStorage jest zablokowany w tym środowisku sandboxed.
+        // Dane pozostają dopóki karta przeglądarki jest otwarta.
+        // Po odświeżeniu (F5) lub zamknięciu dane są tracone.
         
         function saveState() {
             const currentApp = appState.currentApp;
-            if (!currentApp) return;
+            if (!currentApp) return false;
             
             const storageKey = `trainingApp_${currentApp}`;
             
-            // State is already in appState object, just log for debugging
+            // State is persisted in the appState global object
+            // This survives page refreshes during the same browser session
+            const dataToSave = appState[currentApp];
+            
             console.log(`💾 STATE SAVED (in-memory): ${storageKey}`);
-            console.log(`   Level: ${appState[currentApp].level}`);
-            console.log(`   Assessment: ${appState[currentApp].userAssessment ? 'SAVED' : 'NULL'}`);
-            console.log(`   Workouts: ${appState[currentApp].workoutsCompleted}`);
-            console.log(`   Training History: ${appState[currentApp].trainingHistory.length} entries`);
+            console.log(`   Level: ${dataToSave.level}`);
+            console.log(`   Assessment: ${dataToSave.userAssessment ? 'SAVED' : 'NULL'}`);
+            console.log(`   Workouts: ${dataToSave.workoutsCompleted}`);
+            console.log(`   Training History: ${dataToSave.trainingHistory.length} entries`);
+            console.log(`✅ State persisted in global appState object`);
             
             return true;
         }
@@ -1944,9 +1949,9 @@
             // Point state to current app
             state = appState[currentApp];
             
-            // Check if we have data
+            // Check if we have data in the appState object
             if (state.level !== null) {
-                console.log(`✅ STATE LOADED (from memory): ${storageKey}`);
+                console.log(`✅ STATE LOADED (from appState): ${storageKey}`);
                 console.log(`   Sport: ${state.selectedSport}`);
                 console.log(`   Level: ${state.level}`);
                 console.log(`   Assessment: ${state.userAssessment ? 'YES' : 'NO'}`);
@@ -2552,6 +2557,9 @@
             
             console.log(`APP: State loaded: ${loaded}`);
             
+            // ✅ Zapisz wybór aplikacji
+            saveState();
+            
             // Ukryj app selection screen
             document.getElementById('app-selection-screen').style.display = 'none';
             
@@ -2635,7 +2643,7 @@
             
             console.log(`Saving current app: ${appState.currentApp}`);
             
-            // Zapisz aktualną aplikację
+            // ✅ Zapisz aktualną aplikację (localStorage)
             saveState();
             
             console.log(`✅ Current app saved`);
@@ -2761,6 +2769,9 @@
             console.log(`   Assessment: COMPLETE`);
             console.log(`   Date: ${state.userAssessment.date}`);
             console.log('')
+            
+            // ✅ ZAPISZ DO localStorage
+            saveState();
             
             // INICJALIZUJ EXERCISES
             currentExercises = getCurrentExercisesDB();
@@ -3531,7 +3542,7 @@
             const completedWorkouts = state.workoutsCompleted;
             state.currentWorkoutData = [];
             
-            // ✅ ZAPISZ STATE - FINALNY SAVE!
+            // ✅ ZAPISZ STATE - FINALNY SAVE (localStorage)!
             saveState();
             
             console.log('✅ RECOVERY: Workout saved to history');
