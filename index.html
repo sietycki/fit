@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pl">
 <head>
@@ -1914,83 +1915,93 @@
     </div>
     
     <script>
-        // ========== PERSISTENCE FUNCTIONS (IN-MEMORY) ==========
-        // Note: Stan jest przechowywany w pamięci JavaScript (appState object).
-        // localStorage jest zablokowany w tym środowisku sandboxed.
-        // Dane pozostają dopóki karta przeglądarki jest otwarta.
-        // Po odświeżeniu (F5) lub zamknięciu dane są tracone.
+        // ========== PERSISTENCE FUNCTIONS (IN-MEMORY ONLY) ==========
+        // ⚠️ localStorage is BLOCKED in sandboxed environment
+        // State persists in JavaScript memory during session only
+        // Data is lost on page refresh (F5) - this is expected behavior
         
         function saveState() {
+            if (!appState.currentApp) {
+                console.warn('No app selected');
+                return false;
+            }
+            
             const currentApp = appState.currentApp;
-            if (!currentApp) return false;
+            const storageKey = 'trainingApp_' + currentApp;
             
-            const storageKey = `trainingApp_${currentApp}`;
-            
-            // State is persisted in the appState global object
-            // This survives page refreshes during the same browser session
-            const dataToSave = appState[currentApp];
-            
-            console.log(`💾 STATE SAVED (in-memory): ${storageKey}`);
-            console.log(`   Level: ${dataToSave.level}`);
-            console.log(`   Assessment: ${dataToSave.userAssessment ? 'SAVED' : 'NULL'}`);
-            console.log(`   Workouts: ${dataToSave.workoutsCompleted}`);
-            console.log(`   Training History: ${dataToSave.trainingHistory.length} entries`);
-            console.log(`✅ State persisted in global appState object`);
-            
-            return true;
+            try {
+                // Data stays in appState object (in-memory)
+                const data = appState[currentApp];
+                
+                console.log('💾 SAVED (in-memory): ' + storageKey);
+                console.log('   Level: ' + data.level);
+                console.log('   Workouts: ' + data.workoutsCompleted);
+                console.log('   History: ' + data.trainingHistory.length + ' entries');
+                
+                return true;
+            } catch (e) {
+                console.error('Save error:', e);
+                return false;
+            }
         }
         
         function loadState() {
-            const currentApp = appState.currentApp;
-            if (!currentApp) return false;
-            
-            const storageKey = `trainingApp_${currentApp}`;
-            
-            // Point state to current app
-            state = appState[currentApp];
-            
-            // Check if we have data in the appState object
-            if (state.level !== null) {
-                console.log(`✅ STATE LOADED (from appState): ${storageKey}`);
-                console.log(`   Sport: ${state.selectedSport}`);
-                console.log(`   Level: ${state.level}`);
-                console.log(`   Assessment: ${state.userAssessment ? 'YES' : 'NO'}`);
-                console.log(`   Workouts: ${state.workoutsCompleted}`);
-                return true;
+            if (!appState.currentApp) {
+                console.warn('No app selected');
+                return false;
             }
             
-            console.log(`ℹ️ NEW STATE: ${storageKey}`);
-            console.log(`   No saved data found`);
+            const currentApp = appState.currentApp;
+            const storageKey = 'trainingApp_' + currentApp;
             
-            return false;
+            try {
+                // Point state alias to current app
+                state = appState[currentApp];
+                
+                if (state.level !== null) {
+                    console.log('✅ LOADED (from memory): ' + storageKey);
+                    console.log('   Level: ' + state.level);
+                    console.log('   Workouts: ' + state.workoutsCompleted);
+                    return true;
+                }
+                
+                console.log('ℹ️ No data in: ' + storageKey);
+                return false;
+                
+            } catch (e) {
+                console.error('Load error:', e);
+                return false;
+            }
         }
         
         function clearState() {
+            if (!appState.currentApp) return false;
+            
             const currentApp = appState.currentApp;
-            if (!currentApp) return;
+            const storageKey = 'trainingApp_' + currentApp;
             
-            const storageKey = `trainingApp_${currentApp}`;
-            
-            console.log(`🗑️ CLEARED: ${storageKey}`);
-            
-            // Reset state dla aktualnej app
-            appState[currentApp] = {
-                selectedSport: currentApp === 'rolki' ? 'roller-skating' : 'push-pull',
-                level: null,
-                userAssessment: null,
-                workoutsCompleted: 0,
-                lastWorkoutDate: null,
-                trainingHistory: [],
-                currentExerciseIndex: 0,
-                workoutInProgress: false,
-                currentWorkoutData: [],
-                activeTab: 'dashboard'
-            };
-            state = appState[currentApp];
-            
-            console.log(`✅ State reset for ${currentApp}`);
-            
-            return true;
+            try {
+                console.log('🗑️ CLEARED: ' + storageKey);
+                
+                appState[currentApp] = {
+                    selectedSport: currentApp === 'rolki' ? 'roller-skating' : 'push-pull',
+                    level: null,
+                    userAssessment: null,
+                    workoutsCompleted: 0,
+                    lastWorkoutDate: null,
+                    trainingHistory: [],
+                    currentExerciseIndex: 0,
+                    workoutInProgress: false,
+                    currentWorkoutData: [],
+                    activeTab: 'dashboard'
+                };
+                state = appState[currentApp];
+                
+                return true;
+            } catch (e) {
+                console.error('Clear error:', e);
+                return false;
+            }
         }
         
         // ========== END PERSISTENCE ==========
